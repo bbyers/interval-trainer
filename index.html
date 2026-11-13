@@ -162,6 +162,9 @@
   .voicepick{display:flex;gap:8px;align-items:stretch}
   .voicepick select{flex:1 1 auto;min-width:0}
   .voicepick .btn{flex:0 0 auto;padding:9px 14px}
+  .voicestatus{margin-top:6px;font-weight:600}
+  .voicestatus:empty{display:none}
+  .voicestatus.ok{color:var(--rest)} .voicestatus.bad{color:var(--danger)}
 
   /* shown only where scripts can't run (file previews); the app container stays out of the way until filled */
   #setup:empty{display:none}
@@ -478,6 +481,7 @@ function renderSetup(){
           <select id="voiceSel" data-field="voicePick" aria-label="Voice"></select>
           <button class="btn" type="button" data-action="testVoice">▶ Test</button>
         </span>
+        <span class="voicestatus small" id="voiceStatus" role="status"></span>
       </label>
       <label class="toggle"><input type="checkbox" data-field="voice" ${st.voice?'checked':''}> <span>Voice callouts (speak each interval)</span></label>
       <label class="toggle"><input type="checkbox" data-field="beeps" ${st.beeps?'checked':''}> <span>Countdown beeps (last 3 sec)</span></label>
@@ -833,7 +837,6 @@ function voiceScore(v){
   if(/neural/.test(n))s+=90;
   if(/premium/.test(n))s+=85;
   if(/enhanced/.test(n))s+=80;
-  if(/\bsiri\b/.test(n))s+=70;
   if(/google/.test(n))s+=60;
   if(/\b(ava|samantha|allison|serena|zoe|nicky|aria|jenny|guy|evan|joelle|nora|tom|alex|karen|moira|tessa|daniel)\b/.test(n))s+=22;
   if(/en[-_]us/i.test(v.lang))s+=15;else if(/^en/i.test(v.lang))s+=8;
@@ -846,15 +849,19 @@ function pickBestVoice(){
   const pool=en.length?en:voiceList;
   return pool.slice().sort((a,b)=>voiceScore(b)-voiceScore(a))[0]||null;
 }
+// iPhone/iPad (Safari, Chrome and every other iOS browser share Apple's engine). There, naming a voice can
+// produce silence with no error, so the phone's own default voice is used unless the viewer picks one.
+const IS_IOS=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 function loadVoices(){
   if(!('speechSynthesis'in window))return;
   voiceList=speechSynthesis.getVoices()||[];
-  if(!voiceList.length)return;
   const stored=state.settings.voiceURI;
-  chosenVoice=(stored&&voiceList.find(v=>v.voiceURI===stored))||pickBestVoice();
+  if(stored==='default')chosenVoice=null;
+  else chosenVoice=(stored&&voiceList.find(v=>v.voiceURI===stored))||(IS_IOS?null:pickBestVoice());
   refreshVoiceSelect();
 }
 function setVoiceByURI(uri){
+  if(!uri){chosenVoice=null;state.settings.voiceURI='default';persistSettings();return;}
   const v=voiceList.find(x=>x.voiceURI===uri);
   if(v){chosenVoice=v;state.settings.voiceURI=uri;persistSettings();}
 }
@@ -863,8 +870,13 @@ function refreshVoiceSelect(){
   let list=voiceList.filter(v=>/^en/i.test(v.lang));
   if(!list.length)list=voiceList.slice();
   list.sort((a,b)=>voiceScore(b)-voiceScore(a));
-  sel.innerHTML=list.length?list.map(v=>`<option value="${esc(v.voiceURI)}">${esc(v.name)} — ${esc(v.lang)}</option>`).join(''):'<option value="">System default</option>';
-  if(chosenVoice)sel.value=chosenVoice.voiceURI;
+  sel.innerHTML='<option value="">'+(IS_IOS?'Phone’s default voice':'Browser’s default voice')+'</option>'+
+    list.map(v=>`<option value="${esc(v.voiceURI)}">${esc(v.name)} — ${esc(v.lang)}</option>`).join('');
+  sel.value=chosenVoice?chosenVoice.voiceURI:'';
+}
+function setVoiceStatus(msg,good){
+  const el=document.getElementById('voiceStatus');if(!el)return;
+  el.textContent=msg;el.className='voicestatus small '+(good?'ok':'bad');
 }
 if('speechSynthesis'in window){loadVoices();speechSynthesis.onvoiceschanged=loadVoices;}
 let lastUtter=null; // keep a reference: some browsers drop an utterance that gets garbage-collected mid-sentence
@@ -879,6 +891,16 @@ function sayNow(u){
   const synth=window.speechSynthesis;
   if(synth.speaking||synth.pending){synth.cancel();setTimeout(()=>{try{synth.resume();synth.speak(u);}catch(e){}},80);}
   else{try{synth.resume();}catch(e){}synth.speak(u);}
+  // A named voice that never starts is silently unavailable: switch to the default voice and say it again.
+  if(u.voice){
+    let started=false;u.addEventListener('start',()=>{started=true;});
+    setTimeout(()=>{
+      if(started||lastUtter!==u||synth.speaking)return;
+      chosenVoice=null;refreshVoiceSelect();
+      setVoiceStatus('That voice didn’t play here, so the default voice is being used.',false);
+      try{synth.cancel();synth.speak(makeUtter(u.text));}catch(e){}
+    },1500);
+  }
 }
 function speak(text){
   if(!state.settings.voice||!('speechSynthesis'in window)||!text)return;
@@ -886,16 +908,17 @@ function speak(text){
 }
 function testVoice(){
   unlockAudio();
-  if(!('speechSynthesis'in window)){toast('This browser can’t speak.');return;}
-  // Plays the intro exactly as the timer will say it with the current settings, and says what happened.
+  if(!('speechSynthesis'in window)){setVoiceStatus('This browser has no voice support. Open the app in Safari.',false);return;}
+  // Plays the intro exactly as the timer will say it, then leaves a status line saying what happened.
   const sample={kind:'go',name:'Sprint',duration:20,round:2,rounds:8,firstOfRound:true,target:850,unit:'cal/hr',watts:240};
   try{
     const u=makeUtter(spokenLabel(sample));let started=false;
-    u.onstart=()=>{started=true;toast('Playing: '+(chosenVoice?chosenVoice.name:'default voice'));};
-    u.onerror=e=>{if(e.error!=='interrupted'&&e.error!=='canceled')toast('The voice failed ('+(e.error||'unknown')+'). Pick another voice and try again.');};
+    setVoiceStatus('Starting the voice…',true);
+    u.addEventListener('start',()=>{started=true;setVoiceStatus('Voice started ✓ ('+(chosenVoice?chosenVoice.name:'default voice')+'). If you still hear nothing, turn off Silent mode and raise the volume.',true);});
+    u.addEventListener('error',e=>{if(e.error!=='interrupted'&&e.error!=='canceled')setVoiceStatus('The voice failed with error “'+(e.error||'unknown')+'”.'+(IS_IOS?' Try Safari.':''),false);});
     sayNow(u);
-    setTimeout(()=>{if(!started)toast('Your phone didn’t start the voice. Turn off Silent mode, raise the volume, or pick another voice.');},3000);
-  }catch(e){toast('The voice couldn’t start here.');}
+    setTimeout(()=>{if(!started)setVoiceStatus('The browser accepted the voice but never started it.'+(IS_IOS?' Chrome on iPhone often can’t speak for web pages. Open the app in Safari.':' Pick another voice and try again.'),false);},4000);
+  }catch(e){setVoiceStatus('The voice couldn’t start here.',false);}
 }
 // Runs inside the Start tap: audio is unlocked here, and the first spoken phrase ("Get ready…") follows in the same tap.
 function primeAV(){
