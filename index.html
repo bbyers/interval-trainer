@@ -803,7 +803,10 @@ applyTheme(lsGet(LS.theme,null));
 /* ---------------- AUDIO ---------------- */
 let actx=null,voiceList=[],chosenVoice=null;
 function unlockAudio(){
+  // iPhone: ask to play like a media app, so the ringer's Silent switch doesn't mute beeps (Safari 16.4+).
+  try{if(navigator.audioSession)navigator.audioSession.type='playback';}catch(e){}
   try{if(!actx)actx=new (window.AudioContext||window.webkitAudioContext)();if(actx.state==='suspended')actx.resume();}catch(e){}
+  if(!voiceList.length)loadVoices();
 }
 function tone(freq,dur,vol){
   if(!state.settings.beeps||!actx)return;
@@ -864,24 +867,39 @@ function refreshVoiceSelect(){
   if(chosenVoice)sel.value=chosenVoice.voiceURI;
 }
 if('speechSynthesis'in window){loadVoices();speechSynthesis.onvoiceschanged=loadVoices;}
+let lastUtter=null; // keep a reference: some browsers drop an utterance that gets garbage-collected mid-sentence
+function makeUtter(text){
+  const u=new SpeechSynthesisUtterance(text);u.rate=1.0;u.pitch=1.0;u.volume=1;
+  if(chosenVoice){u.voice=chosenVoice;u.lang=chosenVoice.lang;}else u.lang='en-US';
+  lastUtter=u;return u;
+}
+// iPhone Safari drops a phrase spoken in the same moment as cancel(), so a phrase that interrupts
+// another waits a beat. The first phrase after a tap is never delayed, which is what unlocks speech.
+function sayNow(u){
+  const synth=window.speechSynthesis;
+  if(synth.speaking||synth.pending){synth.cancel();setTimeout(()=>{try{synth.resume();synth.speak(u);}catch(e){}},80);}
+  else{try{synth.resume();}catch(e){}synth.speak(u);}
+}
 function speak(text){
   if(!state.settings.voice||!('speechSynthesis'in window)||!text)return;
-  try{
-    if(speechSynthesis.speaking||speechSynthesis.pending)speechSynthesis.cancel();
-    const u=new SpeechSynthesisUtterance(text);u.rate=1.0;u.pitch=1.0;u.volume=1;if(chosenVoice)u.voice=chosenVoice;
-    speechSynthesis.speak(u);
-  }catch(e){}
+  try{sayNow(makeUtter(text));}catch(e){}
 }
 function testVoice(){
   unlockAudio();
   if(!('speechSynthesis'in window)){toast('This browser can’t speak.');return;}
-  // Plays the intro exactly as the timer will say it with the current settings.
+  // Plays the intro exactly as the timer will say it with the current settings, and says what happened.
   const sample={kind:'go',name:'Sprint',duration:20,round:2,rounds:8,firstOfRound:true,target:850,unit:'cal/hr',watts:240};
-  try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(spokenLabel(sample));u.rate=1.0;u.pitch=1.0;if(chosenVoice)u.voice=chosenVoice;speechSynthesis.speak(u);}catch(e){}
+  try{
+    const u=makeUtter(spokenLabel(sample));let started=false;
+    u.onstart=()=>{started=true;toast('Playing: '+(chosenVoice?chosenVoice.name:'default voice'));};
+    u.onerror=e=>{if(e.error!=='interrupted'&&e.error!=='canceled')toast('The voice failed ('+(e.error||'unknown')+'). Pick another voice and try again.');};
+    sayNow(u);
+    setTimeout(()=>{if(!started)toast('Your phone didn’t start the voice. Turn off Silent mode, raise the volume, or pick another voice.');},3000);
+  }catch(e){toast('The voice couldn’t start here.');}
 }
+// Runs inside the Start tap: audio is unlocked here, and the first spoken phrase ("Get ready…") follows in the same tap.
 function primeAV(){
   unlockAudio();
-  if('speechSynthesis'in window){try{const u=new SpeechSynthesisUtterance('');u.volume=0;speechSynthesis.speak(u);}catch(e){}}
 }
 
 /* ---------------- WAKE LOCK ---------------- */
