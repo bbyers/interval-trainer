@@ -812,7 +812,7 @@ function unlockAudio(){
   // iPhone: ask to play like a media app, so the ringer's Silent switch doesn't mute beeps (Safari 16.4+).
   try{if(navigator.audioSession)navigator.audioSession.type='playback';}catch(e){}
   try{if(!actx)actx=new (window.AudioContext||window.webkitAudioContext)();if(actx.state!=='running')actx.resume();}catch(e){}
-  if(useRecorded())decodeClips();
+  if(useRecorded()){unlockVoiceEl();setTimeout(decodeClips,1500);} // the first callout's clips decode first
   else if(!voiceList.length)loadVoices();
 }
 function tone(freq,dur,vol){
@@ -876,8 +876,8 @@ function refreshVoiceSelect(){
   if(!list.length)list=voiceList.slice();
   list.sort((a,b)=>voiceScore(b)-voiceScore(a));
   sel.innerHTML=(HAS_CLIPS?'<option value="recorded">Built-in recorded voice (works on iPhone)</option>':'')+
-    ('speechSynthesis'in window?'<option value="">'+(IS_IOS?'Phone’s default voice':'Browser’s default voice')+'</option>':'')+
-    list.map(v=>`<option value="${esc(v.voiceURI)}">${esc(v.name)} — ${esc(v.lang)}</option>`).join('');
+    ('speechSynthesis'in window&&!(IS_IOS&&HAS_CLIPS)?'<option value="">'+(IS_IOS?'Phone’s default voice':'Browser’s default voice')+'</option>':'')+
+    (IS_IOS&&HAS_CLIPS?[]:list).map(v=>`<option value="${esc(v.voiceURI)}">${esc(v.name)} — ${esc(v.lang)}</option>`).join('');
   sel.value=useRecorded()?'recorded':(chosenVoice?chosenVoice.voiceURI:'');
 }
 function setVoiceStatus(msg,good){
@@ -917,21 +917,63 @@ const clipBuf={};let clipsDecoding=null,clipSources=[];
 const GAP='|';
 function useRecorded(){
   if(!HAS_CLIPS)return false;
+  if(IS_IOS)return true; // iPhone speech can stay silent for web pages, so iPhones always use the recordings
   const v=state.settings.voiceURI;
   if(v==='recorded')return true;
   if(v)return !('speechSynthesis'in window);
-  return IS_IOS||!('speechSynthesis'in window);
+  return !('speechSynthesis'in window);
 }
-function decodeClips(){
-  if(clipsDecoding||!actx||!HAS_CLIPS)return clipsDecoding;
-  clipsDecoding=Promise.all(Object.keys(CLIPS).map(k=>new Promise(res=>{
+// Each clip decodes on its own with a time limit, so one clip the phone can't decode never blocks the rest.
+const clipPromise={};
+function decodeKey(k){
+  if(clipBuf[k])return Promise.resolve(clipBuf[k]);
+  if(clipPromise[k])return clipPromise[k];
+  if(!actx||!CLIPS[k])return Promise.resolve(null);
+  clipPromise[k]=new Promise(res=>{
+    let done=false;const fin=b=>{if(done)return;done=true;if(b)clipBuf[k]=b;res(b||null);};
+    setTimeout(()=>fin(null),3000);
     try{
       const bin=atob(CLIPS[k]),a=new Uint8Array(bin.length);
       for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);
-      actx.decodeAudioData(a.buffer,b=>{clipBuf[k]=b;res();},()=>res());
-    }catch(e){res();}
-  })));
+      const p=actx.decodeAudioData(a.buffer,b=>fin(b),()=>fin(null));
+      if(p&&p.catch)p.catch(()=>fin(null));
+    }catch(e){fin(null);}
+  });
+  return clipPromise[k];
+}
+function decodeClips(){
+  if(!actx||!HAS_CLIPS)return null;
+  if(!clipsDecoding)clipsDecoding=Promise.all(Object.keys(CLIPS).map(decodeKey));
   return clipsDecoding;
+}
+// Fallback player: plays the same recordings through an <audio> element, unlocked by the Start/Test tap.
+let voiceEl=null;
+function silentWavURI(){
+  const n=1100,b=new Uint8Array(44+n*2),v=new DataView(b.buffer),s=(o,t)=>{for(let i=0;i<t.length;i++)b[o+i]=t.charCodeAt(i);};
+  s(0,'RIFF');v.setUint32(4,36+n*2,true);s(8,'WAVE');s(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+  v.setUint32(24,22050,true);v.setUint32(28,44100,true);v.setUint16(32,2,true);v.setUint16(34,16,true);s(36,'data');v.setUint32(40,n*2,true);
+  let bin='';for(let i=0;i<b.length;i++)bin+=String.fromCharCode(b[i]);return 'data:audio/wav;base64,'+btoa(bin);
+}
+function unlockVoiceEl(){
+  if(!voiceEl){voiceEl=new Audio();voiceEl.setAttribute('playsinline','');voiceEl.preload='auto';}
+  if(voiceEl.dataset.unlocked)return;
+  voiceEl.dataset.unlocked='1';
+  try{voiceEl.src=silentWavURI();const p=voiceEl.play();if(p&&p.catch)p.catch(()=>{});}catch(e){}
+}
+function mediaQueue(keys,token){
+  if(!voiceEl)return;
+  let i=0;
+  const next=()=>{
+    if(playClips.token!==token)return;
+    while(i<keys.length&&keys[i]!==GAP&&!CLIPS[keys[i]])i++;
+    if(i>=keys.length)return;
+    const k=keys[i++];
+    if(k===GAP){setTimeout(next,160);return;}
+    voiceEl.onended=next;voiceEl.onerror=next;
+    voiceEl.src='data:audio/mp4;base64,'+CLIPS[k];
+    const p=voiceEl.play();if(p&&p.catch)p.catch(()=>{});
+  };
+  next();
 }
 function numClips(n){
   n=Math.max(0,Math.round(n));const out=[];
@@ -964,14 +1006,21 @@ function phraseClips(s){
   if(state.settings.speakWatts!==false&&s.watts>0)o.push(GAP,...(s.wattsEst?['about']:[]),...numClips(s.watts),'watts');
   return o;
 }
-function stopClips(){clipSources.forEach(x=>{try{x.stop();}catch(e){}});clipSources=[];}
+function stopClips(){
+  clipSources.forEach(x=>{try{x.stop();}catch(e){}});clipSources=[];
+  if(voiceEl){try{voiceEl.onended=null;voiceEl.onerror=null;voiceEl.pause();}catch(e){}}
+}
 function playClips(keys,force){
-  if(!actx||(!state.settings.voice&&!force))return false;
-  try{if(actx.state!=='running')actx.resume();}catch(e){}
+  if(!state.settings.voice&&!force)return false;
   stopClips();
   const token={};playClips.token=token;
-  const go=()=>{
+  if(!actx){playClips.mode='audio player';mediaQueue(keys,token);return !!voiceEl;}
+  try{if(actx.state!=='running')actx.resume();}catch(e){}
+  const need=keys.filter((k,i)=>k!==GAP&&CLIPS[k]&&keys.indexOf(k)===i);
+  Promise.all(need.map(decodeKey)).then(bufs=>{
     if(playClips.token!==token)return;
+    if(bufs.some(b=>!b)){playClips.mode='audio player';mediaQueue(keys,token);return;}
+    playClips.mode='Web Audio';
     let t=actx.currentTime+0.06;
     keys.forEach(k=>{
       if(k===GAP){t+=0.16;return;}
@@ -979,8 +1028,7 @@ function playClips(keys,force){
       const src=actx.createBufferSource();src.buffer=b;src.connect(actx.destination);src.start(t);
       clipSources.push(src);t+=b.duration+0.01;
     });
-  };
-  if(keys.every(k=>k===GAP||clipBuf[k]))go();else{const p=decodeClips();if(p)p.then(go);}
+  });
   return true;
 }
 function announce(s){if(useRecorded())playClips(phraseClips(s));else speak(spokenLabel(s));}
@@ -994,8 +1042,14 @@ function testVoice(){
   // Plays the intro exactly as the timer will say it, then leaves a status line saying what happened.
   const sample={kind:'go',name:'Sprint',duration:20,round:2,rounds:8,firstOfRound:true,target:850,unit:'cal/hr',watts:240};
   if(useRecorded()){
-    const ok=playClips(phraseClips(sample),true);
-    setVoiceStatus(ok?'Playing the built-in recorded voice ✓. If you hear nothing, raise the volume and turn off Silent mode.':'Sound isn’t available in this browser.',ok);
+    const keys=phraseClips(sample);
+    playClips(keys,true);
+    setVoiceStatus('Loading the recorded voice…',true);
+    const need=keys.filter(k=>k!==GAP&&CLIPS[k]);
+    Promise.all(need.map(decodeKey)).then(bufs=>{
+      const ok=bufs.filter(Boolean).length;
+      setVoiceStatus('Recorded voice: '+ok+' of '+need.length+' clips decoded, playing through '+(playClips.mode||(actx?'Web Audio':'the audio player'))+'. If you hear nothing, raise the volume and turn off Silent mode.',ok===need.length||!!voiceEl);
+    });
     return;
   }
   if(!('speechSynthesis'in window)){setVoiceStatus('This browser has no voice support. Pick the built-in recorded voice.',false);return;}
