@@ -1,0 +1,1084 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Interval and superset timer with per-interval countdowns, intensity targets and voice callouts. One self-contained file that works offline.">
+<meta name="theme-color" content="#f3f4f6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0c0e12" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Intervals">
+<meta name="it-standalone" content="1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232f67f5'/%3E%3Ccircle cx='32' cy='36' r='17' fill='none' stroke='white' stroke-width='5'/%3E%3Cpath d='M32 36V26' stroke='white' stroke-width='5' stroke-linecap='round'/%3E%3Crect x='26' y='8' width='12' height='6' rx='2' fill='white'/%3E%3C/svg%3E">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Interval Trainer</title>
+<style>
+  /* Layout: single centered column; a scrolling builder screen and a full-height play screen that swap in place. */
+  :root{
+    --bg:#f3f4f6; --surface:#ffffff; --surface-2:#eceef2; --line:#dde1e8;
+    --fg:#141821; --fg-dim:#5a6474; --fg-faint:#8a94a4;
+    --accent:#2f67f5; --accent-ink:#ffffff;
+    --work:#e5484d; --work-bg:#fdecec;
+    --rest:#12a36b; --rest-bg:#e7f6ee;
+    --prep:#3b82f6; --prep-bg:#ebf2ff;
+    --danger:#d33a3f;
+    --shadow:0 1px 2px rgba(16,22,34,.06),0 6px 20px rgba(16,22,34,.06);
+    --radius:16px; --radius-sm:10px;
+    --font:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --display:ui-rounded,"SF Pro Rounded",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#0c0e12; --surface:#15181f; --surface-2:#1d222b; --line:#2a303b;
+      --fg:#edf0f5; --fg-dim:#9aa4b4; --fg-faint:#6f7988;
+      --accent:#5d86ff; --accent-ink:#0b0d11;
+      --work:#ff6b6f; --work-bg:#241316;
+      --rest:#3bd690; --rest-bg:#0f2219;
+      --prep:#6aa0ff; --prep-bg:#121a2c;
+      --danger:#ff6b6f;
+      --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 28px rgba(0,0,0,.45);
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0c0e12; --surface:#15181f; --surface-2:#1d222b; --line:#2a303b;
+    --fg:#edf0f5; --fg-dim:#9aa4b4; --fg-faint:#6f7988;
+    --accent:#5d86ff; --accent-ink:#0b0d11;
+    --work:#ff6b6f; --work-bg:#241316;
+    --rest:#3bd690; --rest-bg:#0f2219;
+    --prep:#6aa0ff; --prep-bg:#121a2c;
+    --danger:#ff6b6f;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 28px rgba(0,0,0,.45);
+    color-scheme:dark;
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;background:var(--bg);color:var(--fg);
+    font-family:var(--font);line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+    font-variant-numeric:tabular-nums;
+  }
+  .wrap{
+    max-width:560px;margin:0 auto;min-height:100%;
+    padding-left:max(16px,env(safe-area-inset-left,0px));
+    padding-right:max(16px,env(safe-area-inset-right,0px));
+    padding-block:18px 28px;
+    display:flex;flex-direction:column;gap:14px;
+  }
+  h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+  button{font-family:inherit;cursor:pointer;color:inherit}
+  input,select{font-family:inherit;font-size:15px}
+  .muted{color:var(--fg-dim)}
+  .small{font-size:12.5px}
+  .hidden{display:none!important}
+
+  /* ---------- header ---------- */
+  .top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .brand{display:flex;align-items:center;gap:10px;min-width:0}
+  .logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--rest));flex:0 0 auto;
+    display:grid;place-items:center;color:#fff;font-weight:700;font-family:var(--display)}
+  .brand h1{font-size:18px;line-height:1.1}
+  .brand p{margin:0;font-size:11.5px;color:var(--fg-dim)}
+  .icon-btn{width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--surface);
+    display:grid;place-items:center;font-size:17px;flex:0 0 auto}
+  .icon-btn:active{transform:scale(.95)}
+
+  /* ---------- cards ---------- */
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow)}
+  .card>h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-dim);margin-bottom:10px;font-family:var(--font);font-weight:600}
+
+  /* presets */
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:8px 13px;font-size:13.5px;font-weight:600}
+  .chip:active{transform:scale(.96)}
+  .chip.ghost{background:transparent;color:var(--fg-dim);border-style:dashed}
+  .saved{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .savedchip{display:inline-flex;align-items:center;background:var(--surface-2);border:1px solid var(--line);border-radius:999px;overflow:hidden}
+  .savedchip .chip{border:0;background:transparent;border-radius:0}
+  .savedchip .x{border:0;background:transparent;color:var(--fg-faint);padding:0 10px 0 2px;font-size:16px;align-self:stretch}
+
+  /* fields */
+  .field{display:flex;flex-direction:column;gap:5px}
+  .field>span{font-size:12px;color:var(--fg-dim);font-weight:600}
+  input[type=text],input[type=number]{
+    width:100%;background:var(--bg);border:1px solid var(--line);border-radius:var(--radius-sm);
+    padding:10px 11px;color:var(--fg);outline:none;transition:border-color .12s,box-shadow .12s}
+  input:focus-visible,select:focus-visible,button:focus-visible{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 28%,transparent)}
+  select{background:var(--bg);border:1px solid var(--line);border-radius:var(--radius-sm);padding:9px 8px;color:var(--fg)}
+
+  /* block card */
+  .block{padding:0;overflow:hidden}
+  .block-head{display:flex;gap:8px;align-items:center;padding:12px 12px 10px;background:var(--surface-2);border-bottom:1px solid var(--line)}
+  .block-head .blockname{font-family:var(--display);font-weight:600;font-size:15px;background:transparent;border:1px solid transparent;flex:1 1 auto;min-width:0}
+  .block-head .blockname:hover{border-color:var(--line)}
+  .block-tools{display:flex;gap:4px;flex:0 0 auto}
+  .block-body{padding:12px}
+  .rounds-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+  .rounds-row .lab{font-size:12px;color:var(--fg-dim);font-weight:600}
+  .stepper{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;background:var(--bg);overflow:hidden}
+  .stepper button{width:34px;height:34px;border:0;background:transparent;font-size:18px;color:var(--fg)}
+  .stepper button:active{background:var(--surface-2)}
+  .stepper input{width:40px;border:0;background:transparent;text-align:center;padding:6px 0;-moz-appearance:textfield}
+  .stepper input::-webkit-outer-spin-button,.stepper input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+
+  .intervals{display:flex;flex-direction:column;gap:8px}
+  .int-row{display:flex;flex-direction:column;gap:9px;background:var(--bg);border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px}
+  .dot{width:11px;height:11px;border-radius:50%;flex:0 0 auto}
+  .dot.work{background:var(--work)} .dot.rest{background:var(--rest)}
+  .int-top{display:flex;align-items:center;gap:8px}
+  .int-top .intname{flex:1 1 auto;min-width:0;border:1px solid transparent;background:transparent;padding:6px 7px;font-weight:600}
+  .int-top .intname:hover{border-color:var(--line);background:var(--surface)}
+  .int-bottom{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end;padding-left:19px}
+  .mini{display:flex;flex-direction:column;gap:4px}
+  .mlab{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--fg-faint);font-weight:700}
+  .dur{display:inline-flex;align-items:center;gap:3px}
+  .dur input{width:44px;text-align:center;padding:7px 4px;background:var(--surface)}
+  .dur span{font-size:11px;color:var(--fg-faint)}
+  .int-bottom select{padding:7px 6px;font-size:13px;background:var(--surface)}
+  .tgt{display:inline-flex;align-items:center;gap:4px}
+  .tgt input{width:54px;text-align:center;padding:7px 4px;background:var(--surface)}
+  .int-tools{display:flex;gap:2px;flex:0 0 auto}
+
+  .icon{width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;font-size:14px;color:var(--fg-dim)}
+  .icon:disabled{opacity:.3}
+  .icon.danger{color:var(--danger);border-color:transparent;background:transparent}
+  .icon:active:not(:disabled){transform:scale(.92)}
+
+  .addint{margin-top:10px;width:100%;border:1px dashed var(--line);background:transparent;color:var(--accent);
+    border-radius:var(--radius-sm);padding:9px;font-weight:600;font-size:13.5px}
+  .addblock{width:100%;border:1px dashed var(--line);background:var(--surface);color:var(--fg);
+    border-radius:var(--radius);padding:13px;font-weight:600;box-shadow:var(--shadow)}
+
+  /* settings */
+  .toggle{display:flex;align-items:center;gap:10px;padding:9px 0;font-size:14px;border-top:1px solid var(--line)}
+  .toggle:first-of-type{border-top:0}
+  .toggle input{width:18px;height:18px;accent-color:var(--accent)}
+  .setrow{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+  .setrow .field{flex:1 1 120px}
+  .voicepick{display:flex;gap:8px;align-items:stretch}
+  .voicepick select{flex:1 1 auto;min-width:0}
+  .voicepick .btn{flex:0 0 auto;padding:9px 14px}
+
+  /* shown only where scripts can't run (file previews); the app container stays out of the way until filled */
+  #setup:empty{display:none}
+  .nojs{max-width:560px;margin:0 auto;padding:28px max(16px,env(safe-area-inset-right,0px)) 28px max(16px,env(safe-area-inset-left,0px));font-size:16px;line-height:1.5}
+  .nojs h1{font-size:24px;margin-bottom:12px}
+  .nojs p{margin:0 0 12px;color:var(--fg)}
+
+  /* sharing */
+  .chip.included{background:transparent;border-color:var(--accent);color:var(--accent)}
+  .chip:disabled{opacity:.45;cursor:default}
+  .sharehint{margin:0 0 10px}
+  .sharefile{display:block;width:100%;margin-top:10px}
+  .importbox{margin-top:14px}
+  .importbtn{margin-top:8px}
+  textarea{width:100%;min-height:64px;background:var(--bg);border:1px solid var(--line);border-radius:var(--radius-sm);
+    padding:10px 11px;color:var(--fg);font:12.5px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    resize:vertical;outline:none;word-break:break-all}
+  textarea:focus-visible{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 28%,transparent)}
+
+  /* start bar */
+  .startbar{position:sticky;bottom:0;display:flex;align-items:center;gap:12px;
+    background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(8px);
+    border:1px solid var(--line);border-radius:var(--radius);padding:11px 12px;box-shadow:var(--shadow);
+    margin-top:2px}
+  .startbar .total{display:flex;flex-direction:column;font-size:11px;color:var(--fg-dim);line-height:1.2}
+  .startbar .total strong{color:var(--fg);font-family:var(--display);font-size:17px}
+  .startbar .total .est{font-size:12px;color:var(--rest);font-weight:700}
+  .startbar .grow{flex:1}
+  .btn{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:11px 15px;font-weight:600;font-size:14px}
+  .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+  .btn.primary.big{padding:13px 22px;font-size:16px}
+  .btn:active{transform:translateY(1px)}
+
+  .foot{text-align:center;color:var(--fg-faint);font-size:11.5px;margin-top:2px}
+
+  /* ---------- TIMER SCREEN ---------- */
+  #timer{position:fixed;inset:0;display:flex;flex-direction:column;background:var(--bg);
+    transition:background .35s ease;z-index:50;
+    padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+    padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+  #timer[data-phase=work]{background:var(--work-bg)}
+  #timer[data-phase=rest]{background:var(--rest-bg)}
+  #timer[data-phase=prep]{background:var(--prep-bg)}
+  .t-inner{flex:1;display:flex;flex-direction:column;max-width:560px;width:100%;margin:0 auto;padding:16px}
+  .t-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .t-block{font-family:var(--display);font-weight:600;font-size:16px}
+  .t-round{font-size:13px;color:var(--fg-dim);font-weight:600}
+
+  .t-stage{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:0}
+  .ring-wrap{position:relative;width:min(74vw,320px);aspect-ratio:1}
+  .ring{width:100%;height:100%;transform:rotate(-90deg)}
+  .ring-bg{stroke:color-mix(in srgb,var(--fg) 12%,transparent)}
+  #timer[data-phase=work] .ring-fg{stroke:var(--work)}
+  #timer[data-phase=rest] .ring-fg{stroke:var(--rest)}
+  #timer[data-phase=prep] .ring-fg{stroke:var(--prep)}
+  .ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+  #tType{font-size:12.5px;letter-spacing:.18em;font-weight:700}
+  #timer[data-phase=work] #tType{color:var(--work)}
+  #timer[data-phase=rest] #tType{color:var(--rest)}
+  #timer[data-phase=prep] #tType{color:var(--prep)}
+  #tBig{font-family:var(--display);font-weight:700;font-size:clamp(58px,19vw,104px);line-height:1;letter-spacing:-.02em}
+  #tName{font-family:var(--display);font-weight:600;font-size:clamp(20px,6vw,30px);text-align:center;padding:0 10px;text-wrap:balance}
+  #tTarget{display:inline-flex;align-items:center;gap:6px;font-size:15px;font-weight:700;padding:5px 13px;border-radius:999px;border:1.5px solid currentColor}
+  #tTarget.empty{display:none}
+  #timer[data-phase=work] #tTarget{color:var(--work)}
+  #timer[data-phase=rest] #tTarget{color:var(--rest)}
+  #timer[data-phase=prep] #tTarget{color:var(--prep)}
+  #tNext{color:var(--fg-dim);font-size:14px;font-weight:600;text-align:center}
+
+  .t-prog{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+  .bar{height:7px;border-radius:999px;background:color-mix(in srgb,var(--fg) 12%,transparent);overflow:hidden}
+  .bar>span{display:block;height:100%;width:0;background:var(--fg);opacity:.55;border-radius:999px;transition:width .25s linear}
+  .t-times{display:flex;justify-content:space-between;font-size:12px;color:var(--fg-dim)}
+
+  .controls{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:14px}
+  .cbtn{width:58px;height:58px;border-radius:50%;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;font-size:22px;box-shadow:var(--shadow)}
+  .cbtn.play{width:78px;height:78px;background:var(--accent);color:var(--accent-ink);border-color:transparent;font-size:30px}
+  .cbtn:active{transform:scale(.94)}
+  .cbtn.stop{color:var(--danger)}
+
+  .complete{position:absolute;inset:0;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(6px);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px;z-index:5}
+  .complete .big{font-family:var(--display);font-size:34px}
+  .complete .emoji{font-size:54px}
+  .complete .row{display:flex;gap:10px}
+
+  .toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);
+    width:max-content;max-width:calc(100% - 32px);text-align:center;
+    background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:16px;font-size:13px;font-weight:600;
+    z-index:99;opacity:0;transition:opacity .2s, transform .2s;pointer-events:none}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
+
+  /* iPhone zooms into any field under 16px when it gets focus */
+  @media (pointer:coarse){input,select,textarea{font-size:16px!important}}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap" id="setup"></div>
+
+<div class="nojs" id="nojs">
+  <h1>Interval Trainer</h1>
+  <p>This file is a small app, and it only runs in a web browser. If you're seeing this message, it was opened in a preview (Mail, Messages, the Files app, Google Drive) that doesn't run apps.</p>
+  <p><strong>Computer or Android:</strong> open the file in Chrome, Safari, Edge or Firefox.</p>
+  <p><strong>iPhone or iPad:</strong> previews there can't run it. Open the app from a web link in Safari instead: the Claude link it came from, or this file uploaded to any website host. Then use Share → Add to Home Screen.</p>
+</div>
+
+<div id="timer" class="hidden" aria-live="polite">
+  <div class="t-inner">
+    <div class="t-head">
+      <div><div class="t-block" id="tBlock">—</div><div class="t-round" id="tRound"></div></div>
+      <button class="icon-btn" id="tTheme" title="Theme" aria-label="Toggle theme">◐</button>
+    </div>
+
+    <div class="t-stage">
+      <div class="ring-wrap">
+        <svg class="ring" viewBox="0 0 240 240" aria-hidden="true">
+          <circle class="ring-bg" cx="120" cy="120" r="108" fill="none" stroke-width="16"/>
+          <circle class="ring-fg" id="ringFg" cx="120" cy="120" r="108" fill="none" stroke-width="16" stroke-linecap="round"/>
+        </svg>
+        <div class="ring-center">
+          <div id="tType">WORK</div>
+          <div id="tBig">0</div>
+        </div>
+      </div>
+      <div id="tName">Interval</div>
+      <div id="tTarget" class="empty"></div>
+      <div id="tNext">Up next: —</div>
+    </div>
+
+    <div class="t-prog">
+      <div class="bar"><span id="tProg"></span></div>
+      <div class="t-times"><span id="tElapsed">0:00</span><span id="tRemain">-0:00</span></div>
+    </div>
+
+    <div class="controls">
+      <button class="cbtn" id="cPrev" aria-label="Previous">⏮</button>
+      <button class="cbtn play" id="cPlay" aria-label="Pause">⏸</button>
+      <button class="cbtn" id="cNext" aria-label="Skip">⏭</button>
+      <button class="cbtn stop" id="cStop" aria-label="Stop">⏹</button>
+    </div>
+  </div>
+
+  <div class="complete hidden" id="complete">
+    <div class="emoji">💪</div>
+    <div class="big">Workout complete</div>
+    <div class="muted" id="completeSub"></div>
+    <div class="row">
+      <button class="btn" id="cRestart">Restart</button>
+      <button class="btn primary" id="cDone">Done</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="application/json" id="bundled-workouts">[]</script>
+
+<script>
+"use strict";
+// Captured before anything changes the page, so a copy of this file can be saved with workouts built in.
+const IS_STANDALONE=!!document.querySelector('meta[name="it-standalone"]');
+const SRC=(function(){
+  try{
+    const st=[].slice.call(document.querySelectorAll('style')).filter(s=>s.textContent.indexOf('--work-bg')>=0)[0];
+    const me=document.currentScript;
+    return {title:document.title||'Interval Trainer',style:st?st.textContent:'',
+      markup:['setup','nojs','timer','toast'].map(id=>{const e=document.getElementById(id);return e?e.outerHTML:'';}).join('\n'),
+      script:me?me.textContent:''};
+  }catch(e){return null;}
+})();
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clamp=(n,a,b)=>Math.max(a,Math.min(b,isNaN(n)?a:n));
+const clone=o=>JSON.parse(JSON.stringify(o));
+const swap=(a,i,j)=>{if(j<0||j>=a.length)return;const t=a[i];a[i]=a[j];a[j]=t;};
+const uid=()=>Math.random().toString(36).slice(2,8);
+
+/* ---------------- presets ---------------- */
+const PRESETS=[
+  {name:"HIIT — Assault Bike",blocks:[
+    {name:"Sprints",rounds:8,intervals:[
+      {name:"Sprint",duration:20,type:"work",target:850,unit:"cal/hr",watts:240},
+      {name:"Recover",duration:40,type:"rest",target:180,unit:"cal/hr",watts:50}]}]},
+  {name:"EMOM",blocks:[
+    {name:"EMOM",rounds:10,intervals:[
+      {name:"Push — hit calories",duration:40,type:"work",target:15,unit:"cal",watts:375},
+      {name:"Rest",duration:20,type:"rest",target:null,unit:"cal/hr",watts:null}]}]},
+  {name:"Tabata",blocks:[
+    {name:"Tabata",rounds:8,intervals:[
+      {name:"All out",duration:20,type:"work",target:900,unit:"cal/hr",watts:250},
+      {name:"Rest",duration:10,type:"rest",target:null,unit:"cal/hr",watts:null}]}]},
+  {name:"Beginner Mix",blocks:[
+    {name:"Warm-up intervals",rounds:3,intervals:[
+      {name:"Moderate",duration:120,type:"work",target:300,unit:"cal/hr",watts:85},
+      {name:"Recovery",duration:60,type:"rest",target:160,unit:"cal/hr",watts:45}]},
+    {name:"Main intervals",rounds:3,intervals:[
+      {name:"Moderate",duration:300,type:"work",target:320,unit:"cal/hr",watts:90},
+      {name:"Recovery",duration:120,type:"rest",target:160,unit:"cal/hr",watts:45}]}]},
+];
+
+const UNITS={'cal/hr':{label:'cal/hr',say:'calories per hour'},'cal':{label:'cal',say:'calories'},'rpm':{label:'RPM',say:'R P M'},'w':{label:'W',say:'watts'},'rpe':{label:'RPE',say:'R P E'},'%hr':{label:'%HR',say:'percent max heart rate'}};
+const UNIT_ORDER=['cal/hr','cal','rpm','w','rpe','%hr'];
+
+/* Workouts from a share code or baked into a copy of this file are rebuilt field by field before use. */
+function sanitizeWorkout(w){
+  if(!w||typeof w!=='object'||!Array.isArray(w.blocks))return null;
+  const text=(v,d)=>(typeof v==='string'&&v.trim()?v.trim():d).slice(0,60);
+  const blocks=w.blocks.slice(0,20).map((b,bi)=>{
+    if(!b||typeof b!=='object'||!Array.isArray(b.intervals))return null;
+    const intervals=b.intervals.slice(0,30).map(iv=>{
+      if(!iv||typeof iv!=='object')return null;
+      const t=Math.round(+iv.target),wt=Math.round(+iv.watts);
+      return {name:text(iv.name,'Interval'),duration:clamp(Math.round(+iv.duration),1,5999),type:iv.type==='rest'?'rest':'work',
+        target:t>0?Math.min(t,2000):null,unit:UNIT_ORDER.includes(iv.unit)?iv.unit:'cal/hr',watts:wt>0?Math.min(wt,3000):null};
+    }).filter(Boolean);
+    return intervals.length?{name:text(b.name,'Block '+(bi+1)),rounds:clamp(Math.round(+b.rounds),1,99),intervals}:null;
+  }).filter(Boolean);
+  return blocks.length?{name:text(w.name,'Shared workout'),blocks}:null;
+}
+/* Watts for an average recreational air-bike rider when an interval has none of its own.
+   Calories convert at ~3.6 cal/hr per watt (about 24% pedalling efficiency). */
+function estWatts(iv){
+  const t=+iv.target||0,d=+iv.duration||0,r5=x=>clamp(Math.round(x/5)*5,20,1500);
+  if(t>0){
+    if(iv.unit==='w')return r5(t);
+    if(iv.unit==='cal/hr')return r5(t/3.6);
+    if(iv.unit==='cal'&&d>0)return r5(t*3600/d/3.6);
+    if(iv.unit==='rpe')return r5(30+Math.min(t,10)*25);
+  }
+  return iv.type==='rest'?50:150;
+}
+function readBundled(){
+  try{
+    const el=document.getElementById('bundled-workouts');
+    const data=el?JSON.parse(el.textContent||'[]'):[];
+    return (Array.isArray(data)?data:[]).slice(0,50).map(sanitizeWorkout).filter(Boolean);
+  }catch(e){return [];}
+}
+const BUNDLED=readBundled();
+
+/* ---------------- state ---------------- */
+const LS={settings:'it_settings_v1',saved:'it_saved_v1',draft:'it_draft_v1',theme:'it_theme_v1'};
+function lsGet(k,f){try{const v=localStorage.getItem(k);return v?JSON.parse(v):f;}catch(e){return f;}}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+
+const state={
+  screen:'setup',
+  settings:Object.assign({prep:10,voice:true,beeps:true,announceRound:true,sayLength:true,speakTarget:false,speakWatts:true,voiceURI:null},lsGet(LS.settings,{})),
+  workout:lsGet(LS.draft,null)||clone(BUNDLED[0]||PRESETS[0]),
+};
+
+function blankInterval(){return {name:"Work",duration:30,type:"work",target:null,unit:"cal/hr",watts:null};}
+function blankBlock(){return {name:"Block",rounds:1,intervals:[blankInterval(),{name:"Rest",duration:15,type:"rest",target:null,unit:"cal/hr",watts:null}]};}
+function blankWorkout(){return {name:"My workout",blocks:[blankBlock()]};}
+
+/* ---------------- helpers ---------------- */
+function fmt(sec){sec=Math.max(0,Math.ceil(sec));const m=Math.floor(sec/60),s=sec%60;return m>0?m+":"+String(s).padStart(2,'0'):String(s);}
+function clk(sec){sec=Math.max(0,Math.round(sec));const m=Math.floor(sec/60),s=sec%60;return m+":"+String(s).padStart(2,'0');}
+function blockSecs(b){return b.intervals.reduce((a,i)=>a+(+i.duration||0),0);}
+function workoutSecs(w){return w.blocks.reduce((a,b)=>a+blockSecs(b)*(+b.rounds||1),0);}
+function totalWithPrep(){return workoutSecs(state.workout)+(+state.settings.prep||0);}
+
+function unitLabel(u){return UNITS[u]?UNITS[u].label:'';}
+function unitSay(u){return UNITS[u]?UNITS[u].say:'';}
+function targetText(o){return (o&&o.target>0&&o.unit&&UNITS[o.unit])?(o.target+' '+unitLabel(o.unit)):'';}
+function estCalories(w){let c=0;w.blocks.forEach(b=>{const r=clamp(+b.rounds||1,1,99);b.intervals.forEach(iv=>{const t=+iv.target||0;if(t<=0)return;if(iv.unit==='cal/hr')c+=t*(+iv.duration||0)/3600*r;else if(iv.unit==='cal')c+=t*r;});});return Math.round(c);}
+
+function persistDraft(){lsSet(LS.draft,state.workout);}
+function persistSettings(){lsSet(LS.settings,state.settings);}
+function loadSaved(){return lsGet(LS.saved,[]);}
+function saveSavedArr(a){lsSet(LS.saved,a);}
+
+/* ---------------- SETUP render ---------------- */
+const setupEl=$('#setup');
+
+function renderSetup(){
+  const w=state.workout,st=state.settings,saved=loadSaved();
+  setupEl.innerHTML=`
+    <div class="top">
+      <div class="brand">
+        <div class="logo">⏱</div>
+        <div><h1>Interval Trainer</h1><p>Supersets &amp; intervals with voice callouts</p></div>
+      </div>
+      <button class="icon-btn" id="themeBtn" aria-label="Toggle theme">◐</button>
+    </div>
+
+    <section class="card">
+      <h2>Load a workout</h2>
+      <div class="chips">
+        ${PRESETS.map((p,i)=>`<button class="chip" data-action="loadPreset" data-pi="${i}">${esc(p.name)}</button>`).join('')}
+        <button class="chip ghost" data-action="newBlank">+ Blank</button>
+      </div>
+      ${BUNDLED.length?`<div class="saved"><span class="small muted">In this file:</span>${BUNDLED.map((p,i)=>`<button class="chip included" data-action="loadBundled" data-xi="${i}">${esc(p.name)}</button>`).join('')}</div>`:''}
+      ${saved.length?`<div class="saved"><span class="small muted">Saved:</span>${saved.map((p,i)=>`<span class="savedchip"><button class="chip" data-action="loadSaved" data-si="${i}">${esc(p.name)}</button><button class="x" data-action="delSaved" data-si="${i}" aria-label="Delete saved">×</button></span>`).join('')}</div>`:''}
+    </section>
+
+    <label class="card field">
+      <span>Workout name</span>
+      <input type="text" data-field="workoutName" value="${esc(w.name)}" placeholder="Name this workout" autocomplete="off">
+    </label>
+
+    ${w.blocks.map((b,bi)=>blockCard(b,bi,w.blocks.length)).join('')}
+
+    <button class="addblock" data-action="addBlock">＋ Add block / superset</button>
+
+    <section class="card">
+      <h2>Settings</h2>
+      <div class="setrow">
+        <label class="field"><span>Prep countdown (sec)</span><input type="number" min="0" max="60" data-field="prep" value="${st.prep}"></label>
+      </div>
+      <label class="field" style="margin-bottom:10px"><span>Voice</span>
+        <span class="voicepick">
+          <select id="voiceSel" data-field="voicePick" aria-label="Voice"></select>
+          <button class="btn" type="button" data-action="testVoice">▶ Test</button>
+        </span>
+      </label>
+      <label class="toggle"><input type="checkbox" data-field="voice" ${st.voice?'checked':''}> <span>Voice callouts (speak each interval)</span></label>
+      <label class="toggle"><input type="checkbox" data-field="beeps" ${st.beeps?'checked':''}> <span>Countdown beeps (last 3 sec)</span></label>
+      <label class="toggle"><input type="checkbox" data-field="announceRound" ${st.announceRound?'checked':''}> <span>Announce round number</span></label>
+      <label class="toggle"><input type="checkbox" data-field="sayLength" ${st.sayLength!==false?'checked':''}> <span>Say how long each interval is</span></label>
+      <label class="toggle"><input type="checkbox" data-field="speakTarget" ${st.speakTarget?'checked':''}> <span>Speak the target metric</span></label>
+      <label class="toggle"><input type="checkbox" data-field="speakWatts" ${st.speakWatts!==false?'checked':''}> <span>Speak the wattage</span></label>
+    </section>
+
+    <section class="card">
+      <h2>Share workouts</h2>
+      <p class="small muted sharehint">Text a workout as a code, or paste a code someone sent you.${canDownload()?' To share everything at once, download a copy of this file with your saved workouts built in.':''}</p>
+      <div class="chips">
+        <button class="chip" data-action="copyCurrent">Copy this workout</button>
+        <button class="chip" data-action="copySaved"${saved.length?'':' disabled'}>Copy all saved (${saved.length})</button>
+      </div>
+      ${canDownload()?'<button class="btn sharefile" data-action="downloadFile">Download file with my saved workouts</button>':''}
+      <label class="field importbox"><span>Paste a code</span>
+        <textarea id="importCode" rows="3" placeholder="IT1:…" autocomplete="off" spellcheck="false"></textarea>
+      </label>
+      <button class="btn importbtn" data-action="importCode">Add workouts</button>
+    </section>
+
+    <div class="startbar">
+      <div class="total"><span>Total</span><strong id="totalTime">${fmt(totalWithPrep())}</strong><span class="est" id="estCal">${estCalories(w)>0?('≈ '+estCalories(w)+' cal'):''}</span></div>
+      <div class="grow"></div>
+      <button class="btn" data-action="saveWorkout">Save</button>
+      <button class="btn primary big" data-action="start">Start ▶</button>
+    </div>
+    <div class="foot">Keep this tab open during your workout. Tap Start to enable sound &amp; voice.</div>
+  `;
+  refreshVoiceSelect();
+}
+
+function blockCard(b,bi,n){
+  return `<section class="card block">
+    <div class="block-head">
+      <input class="blockname" type="text" data-field="blockName" data-bi="${bi}" value="${esc(b.name)}" placeholder="Block name" autocomplete="off">
+      <div class="block-tools">
+        <button class="icon" data-action="moveBlockUp" data-bi="${bi}" ${bi===0?'disabled':''} aria-label="Move up">↑</button>
+        <button class="icon" data-action="moveBlockDown" data-bi="${bi}" ${bi===n-1?'disabled':''} aria-label="Move down">↓</button>
+        <button class="icon danger" data-action="delBlock" data-bi="${bi}" aria-label="Delete block">🗑</button>
+      </div>
+    </div>
+    <div class="block-body">
+      <div class="rounds-row">
+        <span class="lab">Rounds</span>
+        <span class="stepper">
+          <button data-action="roundsDown" data-bi="${bi}" aria-label="Fewer rounds">−</button>
+          <input type="number" min="1" max="99" data-field="rounds" data-bi="${bi}" value="${b.rounds}">
+          <button data-action="roundsUp" data-bi="${bi}" aria-label="More rounds">＋</button>
+        </span>
+        <span class="small muted">${b.intervals.length} interval${b.intervals.length===1?'':'s'} · ${fmt(blockSecs(b))}/round</span>
+      </div>
+      <div class="intervals">
+        ${b.intervals.map((iv,ii)=>intervalRow(iv,bi,ii,b.intervals.length)).join('')}
+      </div>
+      <button class="addint" data-action="addInterval" data-bi="${bi}">＋ Add interval</button>
+    </div>
+  </section>`;
+}
+
+function intervalRow(iv,bi,ii,len){
+  const d=+iv.duration||0,m=Math.floor(d/60),s=d%60;
+  const tgt=(+iv.target>0)?iv.target:'';
+  const unit=iv.unit||'cal/hr';
+  return `<div class="int-row" data-bi="${bi}" data-ii="${ii}">
+    <div class="int-top">
+      <span class="dot ${iv.type}"></span>
+      <input class="intname" type="text" data-field="intName" data-bi="${bi}" data-ii="${ii}" value="${esc(iv.name)}" placeholder="Interval name" autocomplete="off">
+      <span class="int-tools">
+        <button class="icon" data-action="intUp" data-bi="${bi}" data-ii="${ii}" ${ii===0?'disabled':''} aria-label="Move up">↑</button>
+        <button class="icon" data-action="intDown" data-bi="${bi}" data-ii="${ii}" ${ii===len-1?'disabled':''} aria-label="Move down">↓</button>
+        <button class="icon danger" data-action="delInt" data-bi="${bi}" data-ii="${ii}" aria-label="Delete interval">×</button>
+      </span>
+    </div>
+    <div class="int-bottom">
+      <span class="mini"><span class="mlab">Time</span><span class="dur">
+        <input type="number" min="0" max="99" data-field="intMin" data-bi="${bi}" data-ii="${ii}" value="${m}"><span>m</span>
+        <input type="number" min="0" max="59" data-field="intSec" data-bi="${bi}" data-ii="${ii}" value="${s}"><span>s</span></span></span>
+      <span class="mini"><span class="mlab">Type</span>
+        <select data-field="intType" data-bi="${bi}" data-ii="${ii}" aria-label="Type">
+          <option value="work" ${iv.type==='work'?'selected':''}>Work</option>
+          <option value="rest" ${iv.type==='rest'?'selected':''}>Rest</option>
+        </select></span>
+      <span class="mini"><span class="mlab">Target</span><span class="tgt">
+        <input type="number" min="0" max="2000" placeholder="—" data-field="intTarget" data-bi="${bi}" data-ii="${ii}" value="${tgt}">
+        <select data-field="intUnit" data-bi="${bi}" data-ii="${ii}" aria-label="Target unit">
+          ${UNIT_ORDER.map(u=>`<option value="${u}" ${unit===u?'selected':''}>${UNITS[u].label}</option>`).join('')}
+        </select></span></span>
+      <span class="mini"><span class="mlab">Watts</span><span class="tgt">
+        <input type="number" min="0" max="3000" placeholder="~${estWatts(iv)}" title="Leave blank to use the estimate for an average rider" data-field="intWatts" data-bi="${bi}" data-ii="${ii}" value="${+iv.watts>0?iv.watts:''}" aria-label="Watts"><span class="small muted">W</span></span></span>
+    </div>
+  </div>`;
+}
+
+function updateTotals(){
+  const el=$('#totalTime');if(el)el.textContent=fmt(totalWithPrep());
+  const ec=$('#estCal');if(ec){const c=estCalories(state.workout);ec.textContent=c>0?('≈ '+c+' cal'):'';}
+}
+
+/* ---------------- SETUP events ---------------- */
+setupEl.addEventListener('click',e=>{
+  const t=e.target.closest('[data-action]');
+  if(t){
+    const a=t.dataset.action,bi=+t.dataset.bi,ii=+t.dataset.ii,pi=+t.dataset.pi,si=+t.dataset.si,w=state.workout;
+    switch(a){
+      case 'loadPreset':state.workout=clone(PRESETS[pi]);persistDraft();renderSetup();break;
+      case 'newBlank':state.workout=blankWorkout();persistDraft();renderSetup();break;
+      case 'loadSaved':state.workout=clone(loadSaved()[si]);persistDraft();renderSetup();toast('Loaded');break;
+      case 'delSaved':{const arr=loadSaved();arr.splice(si,1);saveSavedArr(arr);renderSetup();break;}
+      case 'addBlock':w.blocks.push(blankBlock());persistDraft();renderSetup();break;
+      case 'delBlock':w.blocks.splice(bi,1);if(!w.blocks.length)w.blocks.push(blankBlock());persistDraft();renderSetup();break;
+      case 'moveBlockUp':swap(w.blocks,bi,bi-1);persistDraft();renderSetup();break;
+      case 'moveBlockDown':swap(w.blocks,bi,bi+1);persistDraft();renderSetup();break;
+      case 'roundsUp':w.blocks[bi].rounds=clamp(w.blocks[bi].rounds+1,1,99);persistDraft();renderSetup();break;
+      case 'roundsDown':w.blocks[bi].rounds=clamp(w.blocks[bi].rounds-1,1,99);persistDraft();renderSetup();break;
+      case 'addInterval':w.blocks[bi].intervals.push(blankInterval());persistDraft();renderSetup();break;
+      case 'delInt':w.blocks[bi].intervals.splice(ii,1);if(!w.blocks[bi].intervals.length)w.blocks[bi].intervals.push(blankInterval());persistDraft();renderSetup();break;
+      case 'intUp':swap(w.blocks[bi].intervals,ii,ii-1);persistDraft();renderSetup();break;
+      case 'intDown':swap(w.blocks[bi].intervals,ii,ii+1);persistDraft();renderSetup();break;
+      case 'saveWorkout':doSave();break;
+      case 'testVoice':testVoice();break;
+      case 'loadBundled':state.workout=clone(BUNDLED[+t.dataset.xi]||PRESETS[0]);persistDraft();renderSetup();break;
+      case 'copyCurrent':shareCode([sanitizeWorkout(state.workout)].filter(Boolean));break;
+      case 'copySaved':shareCode(loadSaved().map(sanitizeWorkout).filter(Boolean));break;
+      case 'downloadFile':downloadWithWorkouts();break;
+      case 'importCode':importFromBox();break;
+      case 'start':startWorkout();break;
+    }
+    return;
+  }
+  if(e.target.closest('#themeBtn'))toggleTheme();
+});
+
+setupEl.addEventListener('input',e=>{
+  const t=e.target,f=t.dataset.field;if(!f)return;
+  const bi=t.dataset.bi!==undefined?+t.dataset.bi:null,ii=t.dataset.ii!==undefined?+t.dataset.ii:null,w=state.workout;
+  if(f==='workoutName')w.name=t.value;
+  else if(f==='blockName')w.blocks[bi].name=t.value;
+  else if(f==='rounds')w.blocks[bi].rounds=clamp(parseInt(t.value,10),1,99);
+  else if(f==='intName')w.blocks[bi].intervals[ii].name=t.value;
+  else if(f==='intWatts'){const v=parseInt(t.value,10);w.blocks[bi].intervals[ii].watts=(isNaN(v)||v<=0)?null:clamp(v,1,3000);}
+  else if(f==='intTarget'){const v=parseInt(t.value,10);w.blocks[bi].intervals[ii].target=(isNaN(v)||v<=0)?null:clamp(v,1,2000);}
+  else if(f==='intMin'||f==='intSec'){
+    const row=t.closest('.int-row');
+    const mm=clamp(parseInt(row.querySelector('[data-field=intMin]').value,10),0,99);
+    const ss=clamp(parseInt(row.querySelector('[data-field=intSec]').value,10),0,59);
+    w.blocks[bi].intervals[ii].duration=Math.max(1,mm*60+ss);
+  }
+  else if(f==='prep'){state.settings.prep=clamp(parseInt(t.value,10),0,60);persistSettings();}
+  refreshWattsHint(t,bi,ii);
+  updateTotals();persistDraft();
+});
+
+setupEl.addEventListener('change',e=>{
+  const t=e.target,f=t.dataset.field;if(!f)return;
+  const bi=+t.dataset.bi,ii=+t.dataset.ii;
+  if(f==='intType'){
+    state.workout.blocks[bi].intervals[ii].type=t.value;
+    const dot=t.closest('.int-row').querySelector('.dot');if(dot)dot.className='dot '+t.value;
+    persistDraft();refreshWattsHint(t,bi,ii);
+  }else if(f==='intUnit'){state.workout.blocks[bi].intervals[ii].unit=t.value;persistDraft();updateTotals();refreshWattsHint(t,bi,ii);}
+  else if(f==='voicePick'){setVoiceByURI(t.value);}
+  else if(f==='voice'){state.settings.voice=t.checked;persistSettings();}
+  else if(f==='beeps'){state.settings.beeps=t.checked;persistSettings();}
+  else if(f==='announceRound'){state.settings.announceRound=t.checked;persistSettings();}
+  else if(f==='sayLength'){state.settings.sayLength=t.checked;persistSettings();}
+  else if(f==='speakTarget'){state.settings.speakTarget=t.checked;persistSettings();}
+  else if(f==='speakWatts'){state.settings.speakWatts=t.checked;persistSettings();}
+});
+
+// Keeps the blank Watts field's "~estimate" hint in step with the interval's target, type and length.
+function refreshWattsHint(t,bi,ii){
+  const row=t.closest&&t.closest('.int-row');if(!row||bi===null||ii===null)return;
+  const iv=state.workout.blocks[bi]&&state.workout.blocks[bi].intervals[ii];if(!iv)return;
+  const w=row.querySelector('[data-field=intWatts]');if(w)w.placeholder='~'+estWatts(iv);
+}
+function doSave(){
+  const arr=loadSaved();const name=(state.workout.name||'Untitled').trim()||'Untitled';
+  const w=clone(state.workout);w.name=name;
+  const idx=arr.findIndex(x=>x.name===name);
+  if(idx>=0)arr[idx]=w;else arr.push(w);
+  saveSavedArr(arr);renderSetup();toast('Saved “'+name+'”');
+}
+
+/* ---------------- sharing ---------------- */
+const CODE_PREFIX='IT1:';
+function b64encUtf8(str){const bytes=new TextEncoder().encode(str);let bin='';for(let i=0;i<bytes.length;i++)bin+=String.fromCharCode(bytes[i]);return btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
+function b64decUtf8(s){s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';const bin=atob(s);const bytes=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);return new TextDecoder().decode(bytes);}
+function encodeWorkouts(list){return CODE_PREFIX+b64encUtf8(JSON.stringify(list));}
+function decodeWorkouts(text){
+  const s=String(text||'').trim();
+  const m=s.match(/IT1:([A-Za-z0-9_-]+)/);
+  let data;
+  if(m)data=JSON.parse(b64decUtf8(m[1]));
+  else if(s[0]==='['||s[0]==='{')data=JSON.parse(s);
+  else return [];
+  return (Array.isArray(data)?data:[data]).map(sanitizeWorkout).filter(Boolean);
+}
+function shareText(list){
+  const label=list.length===1?list[0].name:list.length+' workouts: '+list.map(w=>w.name).join(', ');
+  return 'Interval Trainer · '+label+'\n'+encodeWorkouts(list);
+}
+async function copyText(text){
+  try{await navigator.clipboard.writeText(text);return true;}catch(e){}
+  try{
+    const ta=document.createElement('textarea');ta.value=text;ta.setAttribute('readonly','');
+    ta.style.position='fixed';ta.style.top='0';ta.style.opacity='0';document.body.appendChild(ta);ta.select();
+    const ok=document.execCommand('copy');ta.remove();if(ok)return true;
+  }catch(e){}
+  return false;
+}
+function shareCode(list){
+  if(!list.length){toast('Save a workout first.');return;}
+  const text=shareText(list);
+  copyText(text).then(ok=>{
+    if(ok){toast('Copied '+(list.length===1?'“'+list[0].name+'”':list.length+' workouts')+'. Paste it in a message.');return;}
+    const box=document.getElementById('importCode');
+    if(box){box.value=text;box.focus();box.select();}
+    toast('Copy the code from the box below.');
+  });
+}
+function mergeIntoSaved(list){
+  const arr=loadSaved();let added=0,first=null;
+  list.forEach((w,i)=>{
+    let stored=arr.find(x=>x.name===w.name&&JSON.stringify(sanitizeWorkout(x))===JSON.stringify(w));
+    if(!stored){
+      let name=w.name,n=2;
+      while(arr.some(x=>x.name===name))name=w.name+' ('+(n++)+')';
+      stored=Object.assign({},w,{name});arr.push(stored);added++;
+    }
+    if(i===0)first=stored;
+  });
+  saveSavedArr(arr);
+  return {added,first};
+}
+function importFromBox(){
+  const box=document.getElementById('importCode');
+  const text=box?box.value:'';
+  if(!text.trim()){toast('Paste a code first.');return;}
+  let list=[];
+  try{list=decodeWorkouts(text);}catch(e){list=[];}
+  if(!list.length){toast('That code didn’t work. Copy the whole code, including IT1:, and try again.');return;}
+  const res=mergeIntoSaved(list);
+  state.workout=clone(res.first);persistDraft();renderSetup();
+  toast(res.added?('Added '+res.added+' workout'+(res.added===1?'':'s')+' to Saved.'):'Those workouts are already saved.');
+}
+// claude.ai version: the viewer's download prompt hands out a standalone copy built from this page.
+let downloadsNS=null;
+function canDownload(){return IS_STANDALONE||!!downloadsNS;}
+if(!IS_STANDALONE&&typeof window.claude==='object'&&window.claude&&typeof window.claude.use==='function'){
+  window.claude.use('downloads').then(d=>{
+    if(!d)return;
+    downloadsNS=d;
+    const box=document.getElementById('importCode');
+    if(state.screen==='setup'&&(!box||!box.value))renderSetup();
+  }).catch(()=>{});
+}
+// Builds a complete, self-contained HTML document (styles, markup, app code, workouts) from the parts captured at load.
+const ICON="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232f67f5'/%3E%3Ccircle cx='32' cy='36' r='17' fill='none' stroke='white' stroke-width='5'/%3E%3Cpath d='M32 36V26' stroke='white' stroke-width='5' stroke-linecap='round'/%3E%3Crect x='26' y='8' width='12' height='6' rx='2' fill='white'/%3E%3C/svg%3E";
+function buildSharedFile(){
+  if(!SRC||!SRC.style||!SRC.script)return null;
+  const saved=loadSaved().map(sanitizeWorkout).filter(Boolean);
+  const list=saved.length?saved:[sanitizeWorkout(state.workout)].filter(Boolean);
+  const merged=BUNDLED.filter(b=>!list.some(w=>w.name===b.name)).concat(list);
+  const json=JSON.stringify(merged).replace(/</g,'\\u003c');
+  const S='scr'+'ipt';
+  const html='<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'+
+    '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'+
+    '<meta name="theme-color" content="#0c0e12">\n<meta name="apple-mobile-web-app-capable" content="yes">\n'+
+    '<meta name="mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-title" content="Intervals">\n'+
+    '<meta name="it-standalone" content="1">\n<link rel="icon" href="'+ICON+'">\n<title>'+esc(SRC.title)+'</title>\n'+
+    '<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}[hidden]{display:none!important}img{max-width:100%}</style>\n'+
+    '<style>'+SRC.style+'</style>\n</head>\n<body>\n'+SRC.markup+'\n'+
+    '<'+S+' type="application/json" id="bundled-workouts">'+json+'</'+S+'>\n'+
+    '<'+S+'>'+SRC.script+'</'+S+'>\n</body>\n</html>\n';
+  return {html,count:list.length,usedCurrent:!saved.length};
+}
+async function downloadWithWorkouts(){
+  if(!IS_STANDALONE){
+    if(!downloadsNS){toast('Downloading isn’t available here.');return;}
+    const f=buildSharedFile();
+    if(!f){toast('Couldn’t prepare the file. Reload the page and try again.');return;}
+    try{
+      await downloadsNS.save({filename:'interval-trainer.html',data:f.html});
+      toast(f.usedCurrent?'Saved with this workout built in.':'Saved with '+f.count+' workout'+(f.count===1?'':'s')+' built in.');
+    }catch(e){
+      const c=e&&e.code;
+      if(c==='declined')return;
+      toast(c==='rate_limited'?'A download prompt is already open.':'Downloading isn’t available here.');
+    }
+    return;
+  }
+  const f=buildSharedFile();
+  if(!f){toast('Downloading isn’t available here.');return;}
+  try{
+    const url=URL.createObjectURL(new Blob([f.html],{type:'text/html'}));
+    const a=document.createElement('a');a.href=url;a.download='interval-trainer.html';
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),5000);
+    toast(f.usedCurrent?'Downloaded with this workout built in.':'Downloaded with '+f.count+' saved workout'+(f.count===1?'':'s')+' built in.');
+  }catch(e){toast('This browser blocked the download.');}
+}
+
+/* ---------------- toast ---------------- */
+let toastT;
+function toast(msg){const el=$('#toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),Math.max(1800,msg.length*60));}
+
+/* ---------------- theme ---------------- */
+function applyTheme(mode){ // mode: 'light'|'dark'|null(system)
+  if(mode)document.documentElement.setAttribute('data-theme',mode);
+  else document.documentElement.removeAttribute('data-theme');
+}
+function toggleTheme(){
+  const cur=lsGet(LS.theme,null);
+  const sysDark=matchMedia('(prefers-color-scheme:dark)').matches;
+  const order=cur? (cur==='dark'?'light':(cur==='light'?null:'dark')) : (sysDark?'light':'dark');
+  lsSet(LS.theme,order);applyTheme(order);
+}
+applyTheme(lsGet(LS.theme,null));
+
+/* ---------------- AUDIO ---------------- */
+let actx=null,voiceList=[],chosenVoice=null;
+function unlockAudio(){
+  try{if(!actx)actx=new (window.AudioContext||window.webkitAudioContext)();if(actx.state==='suspended')actx.resume();}catch(e){}
+}
+function tone(freq,dur,vol){
+  if(!state.settings.beeps||!actx)return;
+  try{
+    const o=actx.createOscillator(),g=actx.createGain(),now=actx.currentTime;
+    o.type='sine';o.frequency.value=freq;o.connect(g);g.connect(actx.destination);
+    g.gain.setValueAtTime(0.0001,now);
+    g.gain.exponentialRampToValueAtTime(vol||0.22,now+0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001,now+dur);
+    o.start(now);o.stop(now+dur+0.02);
+  }catch(e){}
+}
+function startTone(type){ // sound when a new segment begins
+  if(type==='work')tone(980,0.18,0.25);
+  else if(type==='rest')tone(540,0.18,0.2);
+  else tone(760,0.14,0.18); // prep
+}
+function fanfare(){
+  if(!actx)return;[660,880,1175].forEach((f,i)=>setTimeout(()=>tone(f,0.22,0.25),i*150));
+}
+function voiceScore(v){
+  const n=(v.name||'').toLowerCase();let s=0;
+  if(/natural/.test(n))s+=100;
+  if(/neural/.test(n))s+=90;
+  if(/premium/.test(n))s+=85;
+  if(/enhanced/.test(n))s+=80;
+  if(/\bsiri\b/.test(n))s+=70;
+  if(/google/.test(n))s+=60;
+  if(/\b(ava|samantha|allison|serena|zoe|nicky|aria|jenny|guy|evan|joelle|nora|tom|alex|karen|moira|tessa|daniel)\b/.test(n))s+=22;
+  if(/en[-_]us/i.test(v.lang))s+=15;else if(/^en/i.test(v.lang))s+=8;
+  if(/compact/.test(n))s-=45;
+  if(/\b(albert|zarvox|trinoids|bells|bad news|bahh|boing|bubbles|cellos|deranged|hysterical|jester|organ|superstar|whisper|wobble|good news|novelty|eddy|flo|grandma|grandpa|reed|rocko|sandy|shelley|junior|kathy|ralph|fred)\b/.test(n))s-=60;
+  return s;
+}
+function pickBestVoice(){
+  const en=voiceList.filter(v=>/^en/i.test(v.lang));
+  const pool=en.length?en:voiceList;
+  return pool.slice().sort((a,b)=>voiceScore(b)-voiceScore(a))[0]||null;
+}
+function loadVoices(){
+  if(!('speechSynthesis'in window))return;
+  voiceList=speechSynthesis.getVoices()||[];
+  if(!voiceList.length)return;
+  const stored=state.settings.voiceURI;
+  chosenVoice=(stored&&voiceList.find(v=>v.voiceURI===stored))||pickBestVoice();
+  refreshVoiceSelect();
+}
+function setVoiceByURI(uri){
+  const v=voiceList.find(x=>x.voiceURI===uri);
+  if(v){chosenVoice=v;state.settings.voiceURI=uri;persistSettings();}
+}
+function refreshVoiceSelect(){
+  const sel=document.getElementById('voiceSel');if(!sel)return;
+  let list=voiceList.filter(v=>/^en/i.test(v.lang));
+  if(!list.length)list=voiceList.slice();
+  list.sort((a,b)=>voiceScore(b)-voiceScore(a));
+  sel.innerHTML=list.length?list.map(v=>`<option value="${esc(v.voiceURI)}">${esc(v.name)} — ${esc(v.lang)}</option>`).join(''):'<option value="">System default</option>';
+  if(chosenVoice)sel.value=chosenVoice.voiceURI;
+}
+if('speechSynthesis'in window){loadVoices();speechSynthesis.onvoiceschanged=loadVoices;}
+function speak(text){
+  if(!state.settings.voice||!('speechSynthesis'in window)||!text)return;
+  try{
+    if(speechSynthesis.speaking||speechSynthesis.pending)speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text);u.rate=1.0;u.pitch=1.0;u.volume=1;if(chosenVoice)u.voice=chosenVoice;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+function testVoice(){
+  unlockAudio();
+  if(!('speechSynthesis'in window)){toast('This browser can’t speak.');return;}
+  // Plays the intro exactly as the timer will say it with the current settings.
+  const sample={kind:'go',name:'Sprint',duration:20,round:2,rounds:8,firstOfRound:true,target:850,unit:'cal/hr',watts:240};
+  try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(spokenLabel(sample));u.rate=1.0;u.pitch=1.0;if(chosenVoice)u.voice=chosenVoice;speechSynthesis.speak(u);}catch(e){}
+}
+function primeAV(){
+  unlockAudio();
+  if('speechSynthesis'in window){try{const u=new SpeechSynthesisUtterance('');u.volume=0;speechSynthesis.speak(u);}catch(e){}}
+}
+
+/* ---------------- WAKE LOCK ---------------- */
+let wakeLock=null;
+async function reqWake(){try{if('wakeLock'in navigator){wakeLock=await navigator.wakeLock.request('screen');}}catch(e){}}
+function relWake(){try{if(wakeLock){wakeLock.release();wakeLock=null;}}catch(e){}}
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible'&&state.screen==='timer'&&!T.paused&&!T.done)reqWake();
+});
+
+/* ---------------- SEGMENTS ---------------- */
+function buildSegments(w,prep){
+  const segs=[];
+  if(prep>0)segs.push({kind:'prep',name:'Get ready',duration:prep,type:'prep',blockName:'Get ready',round:0,rounds:0,firstOfRound:false});
+  w.blocks.forEach((b,bi)=>{
+    const rounds=clamp(+b.rounds||1,1,99);
+    for(let r=1;r<=rounds;r++){
+      b.intervals.forEach((iv,ii)=>{
+        segs.push({kind:'go',name:(iv.name||'Interval').trim()||'Interval',duration:Math.max(1,+iv.duration||1),
+          type:iv.type==='rest'?'rest':'work',blockName:(b.name||('Block '+(bi+1))).trim()||('Block '+(bi+1)),
+          round:r,rounds:rounds,firstOfRound:ii===0,
+          target:(+iv.target>0)?+iv.target:null,unit:iv.unit||'cal/hr',
+          watts:(+iv.watts>0)?+iv.watts:estWatts(iv),wattsEst:!(+iv.watts>0)});
+      });
+    }
+  });
+  for(let i=0;i<segs.length;i++)segs[i].next=segs[i+1]?segs[i+1].name:null;
+  return segs;
+}
+
+/* ---------------- TIMER engine ---------------- */
+const RING_C=2*Math.PI*108;
+const T={segs:[],idx:0,segStart:0,remaining:0,paused:false,done:false,raf:null,lastSec:null,totalDur:0,elapsedBefore:0};
+$('#ringFg').style.strokeDasharray=RING_C;
+
+function startWorkout(){
+  const segs=buildSegments(state.workout,+state.settings.prep||0);
+  if(!segs.some(s=>s.kind==='go')){toast('Add at least one interval first');return;}
+  primeAV();reqWake();
+  T.segs=segs;T.totalDur=segs.reduce((a,s)=>a+s.duration,0);T.idx=0;T.paused=false;T.done=false;
+  state.screen='timer';
+  $('#complete').classList.add('hidden');
+  $('#timer').classList.remove('hidden');
+  document.body.style.overflow='hidden';
+  setPlayIcon();
+  enterSegment();
+  T.raf=requestAnimationFrame(loop);
+}
+
+function enterSegment(){
+  const s=T.segs[T.idx];
+  T.segStart=performance.now();
+  T.lastSec=null;
+  T.elapsedBefore=T.segs.slice(0,T.idx).reduce((a,x)=>a+x.duration,0);
+  T.remaining=s.duration;
+  $('#timer').dataset.phase=(s.kind==='prep')?'prep':s.type;
+  $('#tBlock').textContent=s.blockName;
+  $('#tRound').textContent=s.rounds>1?('Round '+s.round+' / '+s.rounds):'';
+  $('#tType').textContent=s.kind==='prep'?'GET READY':(s.type==='work'?'WORK':'REST');
+  $('#tName').textContent=s.name;
+  const tt=[targetText(s)?'🎯 '+targetText(s):'',s.watts>0?'⚡ '+(s.wattsEst?'~':'')+s.watts+' W':''].filter(Boolean).join(' · '),te=$('#tTarget');
+  if(tt){te.textContent=tt;te.classList.remove('empty');}else{te.textContent='';te.classList.add('empty');}
+  $('#tNext').textContent=s.next?('Up next: '+s.next):'Up next: Finish';
+  updateDisplay(s,s.duration);
+  startTone(s.kind==='prep'?'prep':s.type);
+  speak(spokenLabel(s));
+}
+
+// Durations read the way a coach says them: "20 seconds", "1 minute 30 seconds", "5 minutes".
+function sayDuration(sec){
+  sec=Math.max(0,Math.round(sec));
+  const m=Math.floor(sec/60),s=sec%60,parts=[];
+  if(m)parts.push(m+(m===1?' minute':' minutes'));
+  if(s||!m)parts.push(s+(s===1?' second':' seconds'));
+  return parts.join(' ');
+}
+function spokenLabel(s){
+  const sayLen=state.settings.sayLength!==false;
+  if(s.kind==='prep')return sayLen?'Get ready. Starting in '+sayDuration(s.duration)+'.':'Get ready.';
+  let out='';
+  if(state.settings.announceRound&&s.firstOfRound&&s.rounds>1)out+='Round '+s.round+'. ';
+  out+=s.name+(sayLen?', '+sayDuration(s.duration):'')+'.';
+  if(state.settings.speakTarget&&s.target>0&&s.unit)out+=' Target '+s.target+' '+unitSay(s.unit)+'.';
+  if(state.settings.speakWatts!==false&&s.watts>0)out+=' '+(s.wattsEst?'About ':'')+s.watts+' watts.';
+  return out;
+}
+
+function updateDisplay(s,remaining){
+  $('#tBig').textContent=fmt(remaining);
+  const frac=s.duration>0?clamp(remaining/s.duration,0,1):0;
+  $('#ringFg').style.strokeDashoffset=RING_C*(1-frac);
+  const done=T.elapsedBefore+(s.duration-remaining);
+  $('#tProg').style.width=(100*clamp(done/T.totalDur,0,1))+'%';
+  $('#tElapsed').textContent=clk(done);
+  $('#tRemain').textContent='-'+clk(Math.max(0,T.totalDur-done));
+}
+
+function loop(){
+  if(T.paused||T.done)return;
+  const s=T.segs[T.idx];
+  const elapsed=(performance.now()-T.segStart)/1000;
+  let remaining=s.duration-elapsed;if(remaining<0)remaining=0;
+  T.remaining=remaining;
+  updateDisplay(s,remaining);
+  const secCeil=Math.ceil(remaining);
+  if(secCeil!==T.lastSec){
+    if(T.lastSec!==null&&secCeil<=3&&secCeil>=1)tone(secCeil===1?760:620,0.09,0.2);
+    T.lastSec=secCeil;
+  }
+  if(remaining<=0){advance();return;}
+  T.raf=requestAnimationFrame(loop);
+}
+
+function advance(){
+  T.idx++;
+  if(T.idx>=T.segs.length){finish();return;}
+  enterSegment();
+  if(!T.paused)T.raf=requestAnimationFrame(loop);
+}
+
+function setPlayIcon(){$('#cPlay').textContent=T.paused?'▶':'⏸';$('#cPlay').setAttribute('aria-label',T.paused?'Resume':'Pause');}
+
+function togglePause(){
+  if(T.done)return;
+  if(T.paused){
+    T.paused=false;
+    const s=T.segs[T.idx];
+    T.segStart=performance.now()-(s.duration-T.remaining)*1000;
+    reqWake();
+    T.raf=requestAnimationFrame(loop);
+  }else{
+    T.paused=true;cancelAnimationFrame(T.raf);
+    try{speechSynthesis.cancel();}catch(e){}
+  }
+  setPlayIcon();
+}
+
+function skipNext(){
+  if(T.done)return;
+  cancelAnimationFrame(T.raf);
+  T.idx++;
+  if(T.idx>=T.segs.length){finish();return;}
+  enterSegment();
+  if(!T.paused)T.raf=requestAnimationFrame(loop);
+}
+
+function skipPrev(){
+  if(T.done)return;
+  cancelAnimationFrame(T.raf);
+  const s=T.segs[T.idx];
+  const elapsed=(performance.now()-T.segStart)/1000;
+  if(elapsed>2.5){enterSegment();} // restart current
+  else{T.idx=Math.max(0,T.idx-1);enterSegment();}
+  if(!T.paused)T.raf=requestAnimationFrame(loop);
+}
+
+function stopWorkout(){
+  cancelAnimationFrame(T.raf);T.paused=true;T.done=true;
+  try{speechSynthesis.cancel();}catch(e){}
+  relWake();
+  state.screen='setup';
+  $('#timer').classList.add('hidden');
+  $('#complete').classList.add('hidden');
+  document.body.style.overflow='';
+}
+
+function finish(){
+  cancelAnimationFrame(T.raf);T.done=true;T.paused=true;
+  relWake();
+  updateDisplay(T.segs[T.segs.length-1],0);
+  fanfare();speak('Workout complete. Great work.');
+  $('#completeSub').textContent='Total time '+clk(T.totalDur)+' · '+countWork()+' work intervals';
+  $('#complete').classList.remove('hidden');
+}
+function countWork(){return T.segs.filter(s=>s.type==='work').length;}
+
+/* timer controls */
+$('#cPlay').addEventListener('click',()=>{unlockAudio();togglePause();});
+$('#cNext').addEventListener('click',skipNext);
+$('#cPrev').addEventListener('click',skipPrev);
+$('#cStop').addEventListener('click',stopWorkout);
+$('#cDone').addEventListener('click',stopWorkout);
+$('#cRestart').addEventListener('click',()=>{$('#complete').classList.add('hidden');startWorkout();});
+$('#tTheme').addEventListener('click',toggleTheme);
+
+document.addEventListener('keydown',e=>{
+  if(state.screen!=='timer')return;
+  if(e.code==='Space'){e.preventDefault();togglePause();}
+  else if(e.code==='ArrowRight')skipNext();
+  else if(e.code==='ArrowLeft')skipPrev();
+  else if(e.code==='Escape')stopWorkout();
+});
+
+/* ---------------- boot ---------------- */
+renderSetup();
+// The app is running, so the "needs a browser" message (shown when scripts can't run) can go.
+(function(){const nj=document.getElementById('nojs');if(nj)nj.parentNode.removeChild(nj);})();
+</script>
+</body>
+</html>
