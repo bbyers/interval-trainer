@@ -338,6 +338,7 @@ const SRC=(function(){
       script:me?me.textContent:''};
   }catch(e){return null;}
 })();
+const APP_VERSION='14';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,isNaN(n)?a:n));
@@ -513,7 +514,7 @@ function renderSetup(){
       <button class="btn" data-action="saveWorkout">Save</button>
       <button class="btn primary big" data-action="start">Start ▶</button>
     </div>
-    <div class="foot">Keep this tab open during your workout. Tap Start to enable sound &amp; voice.</div>
+    <div class="foot">Keep this tab open during your workout. Tap Start to enable sound &amp; voice.<br>Version ${APP_VERSION}${IS_IOS?' · iPhone mode':''}</div>
   `;
   refreshVoiceSelect();
 }
@@ -1048,7 +1049,7 @@ function testVoice(){
     const need=keys.filter(k=>k!==GAP&&CLIPS[k]);
     Promise.all(need.map(decodeKey)).then(bufs=>{
       const ok=bufs.filter(Boolean).length;
-      setVoiceStatus('Recorded voice: '+ok+' of '+need.length+' clips decoded, playing through '+(playClips.mode||(actx?'Web Audio':'the audio player'))+'. If you hear nothing, raise the volume and turn off Silent mode.',ok===need.length||!!voiceEl);
+      setVoiceStatus('v'+APP_VERSION+' · Recorded voice: '+ok+' of '+need.length+' clips decoded, playing through '+(playClips.mode||(actx?'Web Audio':'the audio player'))+'. If you hear nothing, raise the volume and turn off Silent mode.',ok===need.length||!!voiceEl);
     });
     return;
   }
